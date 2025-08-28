@@ -10,7 +10,6 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { Prisma } from '@prisma/client';
 import { AuthUserService, parseClerkAuthHeader } from './auth-user.service';
 
 @Controller('users')
@@ -21,8 +20,12 @@ export class UsersController {
   ) {}
 
   @Post()
-  create(@Body() data: any) {
-    return this.usersService.create(data);
+  create(@Body() data: { name: string; email: string }) {
+    return this.usersService.create({
+      name: data.name,
+      email: data.email,
+      password: '',
+    });
   }
 
   @Get()
@@ -30,28 +33,13 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
-  }
-
-  @Put(':id')
-  update(@Param('id') id: string, @Body() data: any) {
-    return this.usersService.update(id, data);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
-  }
-
   // GET /users/me
   @Get('me')
   async getMe(@Headers('authorization') authorization?: string) {
     const claims = parseClerkAuthHeader(authorization);
     if (!claims) throw new UnauthorizedException();
-    const user = await this.authUserService.getOrCreateByClerk(claims);
-    return this.usersService.findOne(user.id);
+    await this.authUserService.getOrCreateByClerk(claims);
+    return this.usersService.findByClerkSub(claims.sub);
   }
 
   // PUT /users/me
@@ -62,7 +50,29 @@ export class UsersController {
   ) {
     const claims = parseClerkAuthHeader(authorization);
     if (!claims) throw new UnauthorizedException();
-    const user = await this.authUserService.getOrCreateByClerk(claims);
-    return this.usersService.update(user.id, { name: data?.name } as any);
+    await this.authUserService.getOrCreateByClerk(claims);
+    return this.usersService.updateByClerkSubOrCreate(
+      claims.sub,
+      { name: data?.name },
+      {
+        email: claims.email,
+        name: claims.name,
+      },
+    );
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.usersService.findOne(id);
+  }
+
+  @Put(':id')
+  update(@Param('id') id: string, @Body() data: { name?: string }) {
+    return this.usersService.update(id, { name: data?.name });
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.usersService.remove(id);
   }
 }
