@@ -46,16 +46,17 @@ export class UsersController {
   @Put('me')
   async updateMe(
     @Headers('authorization') authorization: string | undefined,
-    @Body() data: { name?: string },
+    @Body() data: { name?: string; email?: string },
   ) {
     const claims = parseClerkAuthHeader(authorization);
     if (!claims) throw new UnauthorizedException();
     await this.authUserService.getOrCreateByClerk(claims);
+    const emailToUse = claims.email ?? data?.email;
     return this.usersService.updateByClerkSubOrCreate(
       claims.sub,
-      { name: data?.name },
+      { name: data?.name, email: emailToUse },
       {
-        email: claims.email,
+        email: emailToUse,
         name: claims.name,
       },
     );
