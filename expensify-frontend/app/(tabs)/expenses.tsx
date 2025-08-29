@@ -16,7 +16,9 @@ import {
   TouchableOpacity, 
   StyleSheet,
   Pressable,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert,
+  Modal
 } from 'react-native'
 import { useThemeColor } from '@/hooks/useThemeColor'
 import { Ionicons } from '@expo/vector-icons'
@@ -40,89 +42,22 @@ export default function Page() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(undefined)
   const [expenseLoading, setExpenseLoading] = useState(false)
 
+  // Edit expense modal state
+  const [editModalVisible, setEditModalVisible] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  const [editAmount, setEditAmount] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editCategoryId, setEditCategoryId] = useState<string | undefined>(undefined)
+  const [editLoading, setEditLoading] = useState(false)
+
+  // Delete loading state
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null)
+
   const backgroundColor = useThemeColor({}, 'background')
   const textColor = useThemeColor({}, 'text')
   const placeholderColor = useThemeColor({}, 'icon')
   const cardColor = useThemeColor({ light: '#ffffff', dark: '#1c1c1e' }, 'background')
   const borderColor = useThemeColor({ light: '#e5e5e7', dark: '#38383a' }, 'text')
-
-  const hasLoadedRef = useRef(false)
-  useEffect(() => {
-    if (!user?.id || !isSignedIn || hasLoadedRef.current) return
-    hasLoadedRef.current = true
-    ;(async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
-        const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined
-        const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined)
-        const [data, cats, me] = await Promise.all([
-          expensesService.listMine(token || undefined),
-          categoriesService.list(token || undefined),
-          usersService.getMe(token || undefined),
-        ])
-        setExpenses(data)
-        setCategories(cats)
-        setBackendUser(me)
-      } catch (e: any) {
-        setError(e?.message || 'Failed to load expenses')
-      } finally {
-        setIsLoading(false)
-      }
-    })()
-  }, [user?.id, isSignedIn])
-
-  const handleCreateCategory = async () => {
-    if (!newCategory.trim()) return
-    try {
-      setCategoryLoading(true)
-      setError(null)
-      const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined
-      const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined)
-      await categoriesService.create({ name: newCategory.trim() }, token || undefined)
-      setNewCategory('')
-      const fresh = await categoriesService.list(token || undefined)
-      setCategories(fresh)
-    } catch (e: any) {
-      setError(e?.message || 'Failed to create category')
-    } finally {
-      setCategoryLoading(false)
-    }
-  }
-
-  const handleCreateExpense = async () => {
-    const amt = parseFloat(amount)
-    if (Number.isNaN(amt) || amt <= 0) {
-      setError('Enter a valid amount')
-      return
-    }
-    try {
-      setExpenseLoading(true)
-      setError(null)
-      const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined
-      const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined)
-      await expensesService.create(
-        {
-          amount: amt,
-          date: new Date().toISOString(),
-          description: description || null,
-          categoryId: selectedCategoryId || null,
-        },
-        token || undefined,
-      )
-      setAmount('')
-      setDescription('')
-      setSelectedCategoryId(undefined)
-      const fresh = await expensesService.listMine(token || undefined)
-      setExpenses(fresh)
-    } catch (e: any) {
-      setError(e?.message || 'Failed to create expense')
-    } finally {
-      setExpenseLoading(false)
-    }
-  }
-
-  const selectedCategory = categories.find(c => c.id === selectedCategoryId)
 
   const styles = StyleSheet.create({
     container: {
@@ -165,13 +100,6 @@ export default function Page() {
       borderWidth: 1,
       borderColor: '#6366f1' + '20',
     },
-    gradientHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 12,
-      marginBottom: 8,
-    },
     input: {
       backgroundColor: backgroundColor,
       borderWidth: 2,
@@ -181,14 +109,6 @@ export default function Page() {
       fontSize: 16,
       color: textColor,
       marginBottom: 12,
-    },
-    inputFocused: {
-      borderColor: '#6366f1',
-      shadowColor: '#6366f1',
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 4,
     },
     primaryButton: {
       backgroundColor: '#6366f1',
@@ -246,41 +166,62 @@ export default function Page() {
     expenseHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       marginBottom: 8,
+    },
+    expenseLeft: {
+      flex: 1,
+      paddingRight: 12,
+    },
+    expenseRight: {
+      alignItems: 'flex-end',
+    },
+    expenseActions: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 8,
     },
     expenseAmount: {
       fontSize: 20,
       fontWeight: '700',
       color: '#10b981',
+      marginBottom: 8,
     },
     expenseDescription: {
       fontSize: 16,
       fontWeight: '600',
       color: textColor,
-      flex: 1,
     },
     expenseDate: {
       fontSize: 14,
       color: placeholderColor,
       marginTop: 4,
     },
+    actionButton: {
+      backgroundColor: backgroundColor,
+      borderRadius: 12,
+      padding: 8,
+      borderWidth: 1,
+      minWidth: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    editButton: {
+      borderColor: '#6366f1' + '40',
+    },
+    deleteButton: {
+      borderColor: '#ef4444' + '40',
+    },
     sectionTitle: {
       fontSize: 18,
       fontWeight: '700',
       color: textColor,
       marginBottom: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
     },
     emptyState: {
       alignItems: 'center',
       padding: 40,
       opacity: 0.7,
-    },
-    emptyStateIcon: {
-      marginBottom: 12,
     },
     loadingContainer: {
       alignItems: 'center',
@@ -296,8 +237,233 @@ export default function Page() {
       borderWidth: 1,
       borderColor: '#fecaca',
       marginBottom: 16,
-    }
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalCard: {
+      backgroundColor: cardColor,
+      borderRadius: 20,
+      padding: 24,
+      width: '100%',
+      maxWidth: 400,
+      shadowColor: '#000',
+      shadowOffset: {
+        width: 0,
+        height: 20,
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: 25,
+      elevation: 20,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: textColor,
+    },
+    modalButtonRow: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 16,
+    },
+    secondaryButton: {
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderColor: '#6b7280',
+      borderRadius: 16,
+      padding: 16,
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 8,
+      flex: 1,
+    },
+    secondaryButtonText: {
+      color: '#6b7280',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    updateButton: {
+      backgroundColor: '#10b981',
+      borderRadius: 16,
+      padding: 16,
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 8,
+      flex: 1,
+      shadowColor: '#10b981',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 6,
+    },
   })
+
+  const hasLoadedRef = useRef(false)
+  useEffect(() => {
+    if (!user?.id || !isSignedIn || hasLoadedRef.current) return
+    hasLoadedRef.current = true
+    loadData()
+  }, [user?.id, isSignedIn])
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined
+      const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined)
+      const [data, cats, me] = await Promise.all([
+        expensesService.listMine(token || undefined),
+        categoriesService.list(token || undefined),
+        usersService.getMe(token || undefined),
+      ])
+      setExpenses(data)
+      setCategories(cats)
+      setBackendUser(me)
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load expenses')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCreateCategory = async () => {
+    if (!newCategory.trim()) return
+    try {
+      setCategoryLoading(true)
+      setError(null)
+      const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined
+      const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined)
+      await categoriesService.create({ name: newCategory.trim() }, token || undefined)
+      setNewCategory('')
+      const fresh = await categoriesService.list(token || undefined)
+      setCategories(fresh)
+    } catch (e: any) {
+      setError(e?.message || 'Failed to create category')
+    } finally {
+      setCategoryLoading(false)
+    }
+  }
+
+  const handleCreateExpense = async () => {
+    const amt = parseFloat(amount)
+    if (Number.isNaN(amt) || amt <= 0) {
+      setError('Enter a valid amount')
+      return
+    }
+    try {
+      setExpenseLoading(true)
+      setError(null)
+      const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined
+      const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined)
+      await expensesService.create(
+        {
+          amount: amt,
+          date: new Date().toISOString(),
+          description: description || null,
+          categoryId: selectedCategoryId || null,
+        },
+        token || undefined,
+      )
+      setAmount('')
+      setDescription('')
+      setSelectedCategoryId(undefined)
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || 'Failed to create expense')
+    } finally {
+      setExpenseLoading(false)
+    }
+  }
+
+  const handleEditExpense = (expense: Expense) => {
+    setEditingExpense(expense)
+    setEditAmount(expense.amount.toString())
+    setEditDescription(expense.description || '')
+    setEditCategoryId(expense.categoryId || undefined)
+    setEditModalVisible(true)
+  }
+
+  const handleUpdateExpense = async () => {
+    if (!editingExpense) return
+    const amt = parseFloat(editAmount)
+    if (Number.isNaN(amt) || amt <= 0) {
+      setError('Enter a valid amount')
+      return
+    }
+    try {
+      setEditLoading(true)
+      setError(null)
+      const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined
+      const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined)
+      await expensesService.update(
+        editingExpense.id,
+        {
+          amount: amt,
+          description: editDescription || null,
+          categoryId: editCategoryId || null,
+        },
+        token || undefined,
+      )
+      setEditModalVisible(false)
+      setEditingExpense(null)
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || 'Failed to update expense')
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  const handleDeleteExpense = async (expense: Expense) => {
+    Alert.alert(
+      'Delete Expense',
+      `Are you sure you want to delete "${expense.description || 'this expense'}"?\n\nAmount: ₹${expense.amount}`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeletingExpenseId(expense.id)
+              const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined
+              const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined)
+              await expensesService.remove(expense.id, token || undefined)
+              await loadData()
+            } catch (e: any) {
+              setError(e?.message || 'Failed to delete expense')
+            } finally {
+              setDeletingExpenseId(null)
+            }
+          },
+        },
+      ],
+    )
+  }
+
+  const closeEditModal = () => {
+    setEditModalVisible(false)
+    setEditingExpense(null)
+    setError(null)
+  }
+
+  const selectedCategory = categories.find(c => c.id === selectedCategoryId)
+  const editSelectedCategory = categories.find(c => c.id === editCategoryId)
 
   return (
     <View style={styles.container}>
@@ -310,7 +476,7 @@ export default function Page() {
         <SignedIn>
           {/* Welcome Card */}
           <View style={styles.welcomeCard}>
-            <View style={styles.gradientHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 8 }}>
               <Ionicons name="sparkles" size={24} color="#6366f1" />
               <Text style={[styles.sectionTitle, { marginBottom: 0, color: '#6366f1' }]}>
                 Welcome back!
@@ -473,7 +639,7 @@ export default function Page() {
                     name="receipt-outline" 
                     size={48} 
                     color={placeholderColor} 
-                    style={styles.emptyStateIcon}
+                    style={{ marginBottom: 12 }}
                   />
                   <Text style={{ 
                     fontSize: 18, 
@@ -496,10 +662,12 @@ export default function Page() {
                 <View>
                   {expenses.slice(0, 10).map((exp) => {
                     const category = categories.find(c => c.id === exp.categoryId)
+                    const isDeleting = deletingExpenseId === exp.id
+                    
                     return (
-                      <View key={exp.id} style={styles.expenseItem}>
+                      <View key={exp.id} style={[styles.expenseItem, { opacity: isDeleting ? 0.6 : 1 }]}>
                         <View style={styles.expenseHeader}>
-                          <View style={{ flex: 1 }}>
+                          <View style={styles.expenseLeft}>
                             <Text style={styles.expenseDescription}>
                               {exp.description || 'Expense'}
                             </Text>
@@ -521,17 +689,41 @@ export default function Page() {
                                 </Text>
                               </View>
                             )}
+                            <Text style={styles.expenseDate}>
+                              {new Date(exp.date).toLocaleDateString('en-IN', {
+                                weekday: 'short',
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </Text>
                           </View>
-                          <Text style={styles.expenseAmount}>₹{exp.amount}</Text>
+                          
+                          <View style={styles.expenseRight}>
+                            <Text style={styles.expenseAmount}>₹{exp.amount}</Text>
+                            <View style={styles.expenseActions}>
+                              <TouchableOpacity
+                                style={[styles.actionButton, styles.editButton]}
+                                onPress={() => handleEditExpense(exp)}
+                                disabled={isDeleting}
+                              >
+                                <Ionicons name="create" size={16} color="#6366f1" />
+                              </TouchableOpacity>
+                              
+                              <TouchableOpacity
+                                style={[styles.actionButton, styles.deleteButton]}
+                                onPress={() => handleDeleteExpense(exp)}
+                                disabled={isDeleting}
+                              >
+                                {isDeleting ? (
+                                  <ActivityIndicator size="small" color="#ef4444" />
+                                ) : (
+                                  <Ionicons name="trash" size={16} color="#ef4444" />
+                                )}
+                              </TouchableOpacity>
+                            </View>
+                          </View>
                         </View>
-                        <Text style={styles.expenseDate}>
-                          {new Date(exp.date).toLocaleDateString('en-IN', {
-                            weekday: 'short',
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </Text>
                       </View>
                     )
                   })}
@@ -593,6 +785,105 @@ export default function Page() {
           </View>
         </SignedOut>
       </ScrollView>
+
+      {/* Edit Expense Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeEditModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Expense</Text>
+              <TouchableOpacity onPress={closeEditModal}>
+                <Ionicons name="close" size={24} color={textColor} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              placeholder="₹0.00"
+              keyboardType="decimal-pad"
+              value={editAmount}
+              onChangeText={setEditAmount}
+              placeholderTextColor={placeholderColor}
+              style={styles.input}
+            />
+
+            <TextInput
+              placeholder="What did you spend on? (optional)"
+              value={editDescription}
+              onChangeText={setEditDescription}
+              placeholderTextColor={placeholderColor}
+              style={styles.input}
+              multiline
+            />
+
+            {categories.length > 0 && (
+              <>
+                <Text style={{ 
+                  fontSize: 16, 
+                  fontWeight: '600', 
+                  color: textColor, 
+                  marginBottom: 12,
+                  marginLeft: 4
+                }}>
+                  Category {editSelectedCategory && `• ${editSelectedCategory.name}`}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 }}>
+                  {categories.map((c) => (
+                    <Pressable
+                      key={c.id}
+                      onPress={() => setEditCategoryId(c.id === editCategoryId ? undefined : c.id)}
+                      style={[
+                        styles.categoryChip,
+                        c.id === editCategoryId && styles.categoryChipSelected
+                      ]}
+                    >
+                      <Text style={[
+                        styles.categoryChipText,
+                        c.id === editCategoryId && styles.categoryChipTextSelected
+                      ]}>
+                        {c.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={closeEditModal}
+                disabled={editLoading}
+              >
+                <Ionicons name="close-circle" size={20} color="#6b7280" />
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.updateButton,
+                  { opacity: !editAmount.trim() || editLoading ? 0.6 : 1 }
+                ]}
+                onPress={handleUpdateExpense}
+                disabled={!editAmount.trim() || editLoading}
+              >
+                {editLoading ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Ionicons name="checkmark-circle" size={20} color="#ffffff" />
+                )}
+                <Text style={styles.primaryButtonText}>
+                  {editLoading ? 'Updating...' : 'Update'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
