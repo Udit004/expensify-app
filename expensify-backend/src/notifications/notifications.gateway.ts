@@ -15,7 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 export interface NotificationData {
   id: string;
-  type: 'budget_warning' | 'budget_exceeded' | 'expense_created' | 'expense_updated' | 'general';
+  type: 'budget_warning' | 'budget_exceeded' | 'expense_created' | 'expense_updated' | 'expense_deleted' | 'general';
   title: string;
   message: string;
   userId: string;
@@ -174,15 +174,37 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   createExpenseNotification(
     userId: string,
     expense: any,
-    action: 'created' | 'updated'
+    action: 'created' | 'updated' | 'deleted'
   ): NotificationData {
     const categoryText = expense.category?.name ? ` in ${expense.category.name}` : '';
     
+    let type: 'expense_created' | 'expense_updated' | 'expense_deleted';
+    let title: string;
+    let actionText: string;
+    
+    switch (action) {
+      case 'created':
+        type = 'expense_created';
+        title = '💸 Expense Added';
+        actionText = 'created';
+        break;
+      case 'updated':
+        type = 'expense_updated';
+        title = '✏️ Expense Updated';
+        actionText = 'updated';
+        break;
+      case 'deleted':
+        type = 'expense_deleted';
+        title = '🗑️ Expense Deleted';
+        actionText = 'deleted';
+        break;
+    }
+    
     return {
       id: `expense_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      type: action === 'created' ? 'expense_created' : 'expense_updated',
-      title: action === 'created' ? '💸 Expense Added' : '✏️ Expense Updated',
-      message: `₹${expense.amount.toFixed(2)} expense ${action}${categoryText}${expense.description ? `: ${expense.description}` : ''}`,
+      type,
+      title,
+      message: `₹${expense.amount.toFixed(2)} expense ${actionText}${categoryText}${expense.description ? `: ${expense.description}` : ''}`,
       userId,
       data: {
         expenseId: expense.id,

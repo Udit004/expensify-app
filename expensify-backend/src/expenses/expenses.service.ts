@@ -125,7 +125,23 @@ export class ExpensesService {
   }
 
   async remove(id: string) {
-    return this.prisma.expense.delete({ where: { id } });
+    // Get the expense before deleting to send notification
+    const expense = await this.prisma.expense.findUnique({
+      where: { id },
+      include: { category: true },
+    });
+
+    if (!expense) {
+      throw new Error('Expense not found');
+    }
+
+    // Delete the expense
+    await this.prisma.expense.delete({ where: { id } });
+
+    // Send deletion notification
+    await this.sendExpenseNotifications(expense, 'deleted');
+
+    return expense;
   }
 
   // Get monthly spending summary
@@ -213,7 +229,7 @@ export class ExpensesService {
     return dailyTotal._sum.amount || 0;
   }
 
-  private async sendExpenseNotifications(expense: any, action: 'created' | 'updated', budgetWarning?: any) {
+  private async sendExpenseNotifications(expense: any, action: 'created' | 'updated' | 'deleted', budgetWarning?: any) {
     try {
       // Get the user with Clerk ID for WebSocket notifications
       const user = await this.prisma.user.findUnique({

@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
 
 export interface CreateNotificationData {
-  type: 'budget_warning' | 'budget_exceeded' | 'expense_created' | 'expense_updated' | 'general';
+  type:
+    | 'budget_warning'
+    | 'budget_exceeded'
+    | 'expense_created'
+    | 'expense_updated'
+    | 'expense_deleted'
+    | 'general';
   title: string;
   message: string;
   userId: string;

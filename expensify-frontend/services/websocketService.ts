@@ -4,7 +4,7 @@ import { getApiBaseUrl } from './api';
 
 export interface NotificationData {
   id: string;
-  type: 'budget_warning' | 'budget_exceeded' | 'expense_created' | 'expense_updated' | 'general';
+  type: 'budget_warning' | 'budget_exceeded' | 'expense_created' | 'expense_updated' | 'expense_deleted' | 'general';
   title: string;
   message: string;
   userId: string;

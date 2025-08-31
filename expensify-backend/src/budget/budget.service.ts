@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 
 export interface CreateBudgetData {
   amount: number;
@@ -35,7 +36,10 @@ export interface BudgetOverview {
 
 @Injectable()
 export class BudgetService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsGateway: NotificationsGateway,
+  ) {}
 
   async create(data: CreateBudgetData) {
     // Check if budget already exists for this user/category/month/year
@@ -49,25 +53,34 @@ export class BudgetService {
       },
     });
 
+    let budget;
+    let isUpdate = false;
+
     if (existingBudget) {
       // Update existing budget instead of creating new one
-      return this.prisma.budget.update({
+      budget = await this.prisma.budget.update({
         where: { id: existingBudget.id },
         data: { amount: data.amount },
         include: { category: true },
       });
+      isUpdate = true;
+    } else {
+      budget = await this.prisma.budget.create({
+        data: {
+          amount: data.amount,
+          month: data.month,
+          year: data.year,
+          userId: data.userId,
+          categoryId: data.categoryId || null,
+        },
+        include: { category: true },
+      });
     }
 
-    return this.prisma.budget.create({
-      data: {
-        amount: data.amount,
-        month: data.month,
-        year: data.year,
-        userId: data.userId,
-        categoryId: data.categoryId || null,
-      },
-      include: { category: true },
-    });
+    // Send notification
+    await this.sendBudgetNotification(budget, isUpdate ? 'updated' : 'created');
+
+    return budget;
   }
 
   async getBudgetsForMonth(userId: string, month: number, year: number) {
@@ -212,17 +225,23 @@ export class BudgetService {
       throw new ForbiddenException('Not authorized to update this budget');
     }
 
-    return this.prisma.budget.update({
+    const updatedBudget = await this.prisma.budget.update({
       where: { id },
       data,
       include: { category: true },
     });
+
+    // Send notification
+    await this.sendBudgetNotification(updatedBudget, 'updated');
+
+    return updatedBudget;
   }
 
   async remove(id: string, userId: string) {
     // Verify budget belongs to user
     const budget = await this.prisma.budget.findUnique({
       where: { id },
+      include: { category: true },
     });
 
     if (!budget) {
@@ -232,6 +251,9 @@ export class BudgetService {
     if (budget.userId !== userId) {
       throw new ForbiddenException('Not authorized to delete this budget');
     }
+
+    // Send notification before deleting
+    await this.sendBudgetNotification(budget, 'deleted');
 
     return this.prisma.budget.delete({
       where: { id },
@@ -284,6 +306,67 @@ export class BudgetService {
       remaining,
       percentageUsed,
       isOverBudget: spentAmount > budget.amount,
+    };
+  }
+
+  private async sendBudgetNotification(budget: any, action: 'created' | 'updated' | 'deleted') {
+    try {
+      // Get the user with Clerk ID for WebSocket notifications
+      const user = await this.prisma.user.findUnique({
+        where: { id: budget.userId },
+        select: { clerkUserId: true }
+      });
+
+      if (!user?.clerkUserId) {
+        console.error('User not found or no Clerk ID for budget notifications:', budget.userId);
+        return;
+      }
+
+      // Create budget notification
+      const budgetNotification = this.createBudgetNotification(budget, action);
+      await this.notificationsGateway.sendNotificationToUser(user.clerkUserId, budgetNotification);
+    } catch (error) {
+      console.error('Error sending budget notification:', error);
+    }
+  }
+
+  private createBudgetNotification(budget: any, action: 'created' | 'updated' | 'deleted') {
+    const categoryText = budget.category?.name ? ` for ${budget.category.name}` : ' (Overall)';
+    const monthYear = `${budget.month}/${budget.year}`;
+    
+    let title: string;
+    let actionText: string;
+    
+    switch (action) {
+      case 'created':
+        title = '💰 Budget Created';
+        actionText = 'created';
+        break;
+      case 'updated':
+        title = '✏️ Budget Updated';
+        actionText = 'updated';
+        break;
+      case 'deleted':
+        title = '🗑️ Budget Deleted';
+        actionText = 'deleted';
+        break;
+    }
+    
+    return {
+      id: `budget_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type: 'general' as const,
+      title,
+      message: `₹${budget.amount.toFixed(2)} budget ${actionText}${categoryText} for ${monthYear}`,
+      userId: budget.userId,
+      data: {
+        budgetId: budget.id,
+        amount: budget.amount,
+        category: budget.category?.name,
+        month: budget.month,
+        year: budget.year,
+      },
+      createdAt: new Date(),
+      isRead: false,
     };
   }
 }
