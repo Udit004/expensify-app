@@ -56,6 +56,10 @@ export default function NotificationsScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
+  // Debug logging
+  console.log('NotificationsScreen: Current notifications count:', notifications.length);
+  console.log('NotificationsScreen: Current unread count:', unreadCount);
+
   const handleNotificationPress = (notification: any) => {
     if (!notification.isRead) {
       markAsRead(notification.id);

@@ -16,6 +16,9 @@ const NotificationBadge: React.FC<NotificationBadgeProps> = ({
 }) => {
   const { unreadCount, isConnected } = useNotifications();
 
+  // Debug logging
+  console.log('NotificationBadge: unreadCount:', unreadCount, 'isConnected:', isConnected);
+
   if (unreadCount === 0) {
     return null; // Don't show badge if no unread notifications
   }

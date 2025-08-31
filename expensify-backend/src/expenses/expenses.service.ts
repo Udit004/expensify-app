@@ -215,13 +215,24 @@ export class ExpensesService {
 
   private async sendExpenseNotifications(expense: any, action: 'created' | 'updated', budgetWarning?: any) {
     try {
-      // Send expense notification using database user ID for storage
+      // Get the user with Clerk ID for WebSocket notifications
+      const user = await this.prisma.user.findUnique({
+        where: { id: expense.userId },
+        select: { clerkUserId: true }
+      });
+
+      if (!user?.clerkUserId) {
+        console.error('User not found or no Clerk ID for notifications:', expense.userId);
+        return;
+      }
+
+      // Send expense notification using database user ID for storage, Clerk user ID for WebSocket
       const expenseNotification = this.notificationsGateway.createExpenseNotification(
         expense.userId, // Use database user ID for storage
         expense,
         action
       );
-      await this.notificationsGateway.sendNotificationToUser(expense.userId, expenseNotification);
+      await this.notificationsGateway.sendNotificationToUser(user.clerkUserId, expenseNotification);
 
       // Send budget notifications if there are warnings
       if (budgetWarning) {
@@ -232,7 +243,7 @@ export class ExpensesService {
             expense.category?.name || null,
             budgetWarning.categoryBudgetStatus
           );
-          await this.notificationsGateway.sendNotificationToUser(expense.userId, categoryNotification);
+          await this.notificationsGateway.sendNotificationToUser(user.clerkUserId, categoryNotification);
         }
 
         // Overall budget warning
@@ -242,7 +253,7 @@ export class ExpensesService {
             null, // null for overall budget
             budgetWarning.overallBudgetStatus
           );
-          await this.notificationsGateway.sendNotificationToUser(expense.userId, overallNotification);
+          await this.notificationsGateway.sendNotificationToUser(user.clerkUserId, overallNotification);
         }
       }
     } catch (error) {

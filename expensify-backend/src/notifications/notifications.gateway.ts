@@ -11,6 +11,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Injectable, Logger } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface NotificationData {
   id: string;
@@ -39,7 +40,10 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   private readonly logger = new Logger(NotificationsGateway.name);
   private userSockets = new Map<string, Set<string>>(); // userId -> Set of socketIds
 
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
@@ -90,29 +94,40 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   }
 
   // Send notification to specific user and store in database
-  async sendNotificationToUser(userId: string, notification: NotificationData) {
+  async sendNotificationToUser(clerkUserId: string, notification: NotificationData) {
     try {
-      // Store notification in database
+      // Get the database user ID for storage
+      const user = await this.prisma.user.findUnique({
+        where: { clerkUserId },
+        select: { id: true }
+      });
+
+      if (!user) {
+        this.logger.error(`User not found for Clerk ID: ${clerkUserId}`);
+        return;
+      }
+
+      // Store notification in database using database user ID
       const dbNotification = await this.notificationsService.create({
         type: notification.type,
         title: notification.title,
         message: notification.message,
-        userId: userId,
+        userId: user.id, // Use database user ID for storage
         data: notification.data,
       });
 
-      // Send via WebSocket
-      this.server.to(`user_${userId}`).emit('notification', {
+      // Send via WebSocket using Clerk user ID
+      this.server.to(`user_${clerkUserId}`).emit('notification', {
         ...notification,
         id: dbNotification.id,
         createdAt: dbNotification.createdAt,
       });
       
-      this.logger.log(`Notification sent to user ${userId}: ${notification.type}`);
+      this.logger.log(`Notification sent to user ${clerkUserId} (DB: ${user.id}): ${notification.type}`);
     } catch (error) {
-      this.logger.error(`Error sending notification to user ${userId}:`, error);
+      this.logger.error(`Error sending notification to user ${clerkUserId}:`, error);
       // Still send via WebSocket even if database storage fails
-      this.server.to(`user_${userId}`).emit('notification', notification);
+      this.server.to(`user_${clerkUserId}`).emit('notification', notification);
     }
   }
 

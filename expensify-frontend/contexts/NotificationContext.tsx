@@ -43,7 +43,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       return;
     }
 
-    console.log('NotificationContext: Setting up WebSocket connection for userId:', userId);
+    console.log('NotificationContext: Setting up WebSocket connection for Clerk userId:', userId);
     
     // Connect to WebSocket
     websocketService.connect(userId);
@@ -91,10 +91,40 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   };
 
   const handleNewNotification = async (notification: WebSocketNotificationData) => {
-    console.log('NotificationContext: Received new notification:', notification);
+    console.log('NotificationContext: Received new notification via WebSocket:', notification);
     
-    // Refresh notifications from database to get the latest data
-    await loadNotificationsFromDatabase();
+    // Add the notification to local state immediately for real-time feel
+    const newNotification: NotificationData = {
+      id: notification.id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      isRead: notification.isRead || false,
+      data: notification.data,
+      createdAt: typeof notification.createdAt === 'string' 
+        ? notification.createdAt 
+        : notification.createdAt.toISOString(),
+      updatedAt: typeof notification.createdAt === 'string' 
+        ? notification.createdAt 
+        : notification.createdAt.toISOString(),
+    };
+    
+    console.log('NotificationContext: Adding notification to state:', newNotification);
+    setNotifications(prev => {
+      // Check if notification already exists to avoid duplicates
+      const exists = prev.find(n => n.id === newNotification.id);
+      if (exists) {
+        console.log('NotificationContext: Notification already exists, skipping');
+        return prev;
+      }
+      
+      const updated = [newNotification, ...prev];
+      console.log('NotificationContext: Updated notifications count:', updated.length);
+      return updated;
+    });
+    
+    // Don't refresh from database immediately to avoid conflicts
+    // The notification is already in local state
   };
 
   const markAsRead = async (notificationId: string) => {
@@ -169,10 +199,20 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       updatedAt: new Date().toISOString(),
     };
     
-    setNotifications(prev => [testNotif, ...prev]);
+    console.log('NotificationContext: Adding test notification:', testNotif);
+    setNotifications(prev => {
+      const updated = [testNotif, ...prev];
+      console.log('NotificationContext: Test notification added, total count:', updated.length);
+      return updated;
+    });
   };
 
   const unreadCount = notifications.filter(notif => !notif.isRead).length;
+
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('NotificationContext: State updated - notifications:', notifications.length, 'unread:', unreadCount);
+  }, [notifications, unreadCount]);
 
   const value: NotificationContextType = {
     notifications,

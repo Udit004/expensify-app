@@ -10,12 +10,16 @@ import {
 } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { AuthUserService, parseClerkAuthHeader } from '../users/auth-user.service';
+import { NotificationsGateway } from './notifications.gateway';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('notifications')
 export class NotificationsController {
   constructor(
     private readonly notificationsService: NotificationsService,
     private readonly authUserService: AuthUserService,
+    private readonly notificationsGateway: NotificationsGateway,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Get()
@@ -90,5 +94,40 @@ export class NotificationsController {
     
     const user = await this.authUserService.getOrCreateByClerk(claims);
     return this.notificationsService.clearAll(user.id);
+  }
+
+  @Post('test-realtime')
+  async testRealtimeNotification(@Headers('authorization') authorization?: string) {
+    const claims = parseClerkAuthHeader(authorization);
+    if (!claims) throw new UnauthorizedException();
+    
+    const user = await this.authUserService.getOrCreateByClerk(claims);
+    
+    // Get the full user object with clerkUserId
+    const fullUser = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { id: true, clerkUserId: true }
+    });
+    
+    if (!fullUser?.clerkUserId) {
+      throw new UnauthorizedException('User not found or no Clerk ID');
+    }
+    
+    // Create a test notification
+    const testNotification = {
+      id: `test_${Date.now()}`,
+      type: 'general' as const,
+      title: '🧪 Real-time Test',
+      message: 'This is a test notification to verify real-time delivery!',
+      userId: fullUser.clerkUserId,
+      data: { test: true },
+      createdAt: new Date(),
+      isRead: false,
+    };
+    
+    // Send via WebSocket using the gateway
+    await this.notificationsGateway.sendNotificationToUser(fullUser.clerkUserId, testNotification);
+    
+    return { message: 'Test notification sent', userId: fullUser.clerkUserId };
   }
 }
