@@ -215,45 +215,34 @@ export class ExpensesService {
 
   private async sendExpenseNotifications(expense: any, action: 'created' | 'updated', budgetWarning?: any) {
     try {
-      // Get the user with Clerk ID for notifications
-      const user = await this.prisma.user.findUnique({
-        where: { id: expense.userId },
-        select: { clerkUserId: true }
-      });
-
-      if (!user?.clerkUserId) {
-        console.error('User not found or no Clerk ID for notifications:', expense.userId);
-        return;
-      }
-
-      // Send expense notification using Clerk user ID
+      // Send expense notification using database user ID for storage
       const expenseNotification = this.notificationsGateway.createExpenseNotification(
-        user.clerkUserId,
+        expense.userId, // Use database user ID for storage
         expense,
         action
       );
-      this.notificationsGateway.sendNotificationToUser(user.clerkUserId, expenseNotification);
+      await this.notificationsGateway.sendNotificationToUser(expense.userId, expenseNotification);
 
       // Send budget notifications if there are warnings
       if (budgetWarning) {
         // Category budget warning
         if (budgetWarning.categoryBudgetStatus) {
           const categoryNotification = this.notificationsGateway.createBudgetWarningNotification(
-            user.clerkUserId,
+            expense.userId, // Use database user ID for storage
             expense.category?.name || null,
             budgetWarning.categoryBudgetStatus
           );
-          this.notificationsGateway.sendNotificationToUser(user.clerkUserId, categoryNotification);
+          await this.notificationsGateway.sendNotificationToUser(expense.userId, categoryNotification);
         }
 
         // Overall budget warning
         if (budgetWarning.overallBudgetStatus) {
           const overallNotification = this.notificationsGateway.createBudgetWarningNotification(
-            user.clerkUserId,
+            expense.userId, // Use database user ID for storage
             null, // null for overall budget
             budgetWarning.overallBudgetStatus
           );
-          this.notificationsGateway.sendNotificationToUser(user.clerkUserId, overallNotification);
+          await this.notificationsGateway.sendNotificationToUser(expense.userId, overallNotification);
         }
       }
     } catch (error) {

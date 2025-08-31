@@ -22,6 +22,7 @@ model User {
   expenses  Expense[]
   categories Category[]
   budgets   Budget[]
+  notifications Notification[]
   createdAt DateTime   @default(now())
 }
 
@@ -59,4 +60,20 @@ model Budget {
   
   // Ensure unique budget per user per category per month/year
   @@unique([userId, categoryId, month, year])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  type        String    // 'budget_warning' | 'budget_exceeded' | 'expense_created' | 'expense_updated' | 'general'
+  title       String
+  message     String
+  isRead      Boolean   @default(false)
+  data        Json?     // Additional data as JSON
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
 }

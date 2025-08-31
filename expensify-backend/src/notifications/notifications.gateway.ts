@@ -10,6 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Injectable, Logger } from '@nestjs/common';
+import { NotificationsService } from './notifications.service';
 
 export interface NotificationData {
   id: string;
@@ -37,6 +38,8 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 
   private readonly logger = new Logger(NotificationsGateway.name);
   private userSockets = new Map<string, Set<string>>(); // userId -> Set of socketIds
+
+  constructor(private readonly notificationsService: NotificationsService) {}
 
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
@@ -86,10 +89,31 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     this.logger.log(`User ${data.userId} left with socket ${client.id}`);
   }
 
-  // Send notification to specific user
-  sendNotificationToUser(userId: string, notification: NotificationData) {
-    this.server.to(`user_${userId}`).emit('notification', notification);
-    this.logger.log(`Notification sent to user ${userId}: ${notification.type}`);
+  // Send notification to specific user and store in database
+  async sendNotificationToUser(userId: string, notification: NotificationData) {
+    try {
+      // Store notification in database
+      const dbNotification = await this.notificationsService.create({
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        userId: userId,
+        data: notification.data,
+      });
+
+      // Send via WebSocket
+      this.server.to(`user_${userId}`).emit('notification', {
+        ...notification,
+        id: dbNotification.id,
+        createdAt: dbNotification.createdAt,
+      });
+      
+      this.logger.log(`Notification sent to user ${userId}: ${notification.type}`);
+    } catch (error) {
+      this.logger.error(`Error sending notification to user ${userId}:`, error);
+      // Still send via WebSocket even if database storage fails
+      this.server.to(`user_${userId}`).emit('notification', notification);
+    }
   }
 
   // Send notification to all clients (admin feature)

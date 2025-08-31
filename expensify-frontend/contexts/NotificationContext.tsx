@@ -1,18 +1,20 @@
 // contexts/NotificationContext.tsx
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { websocketService, NotificationData } from '../services/websocketService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { websocketService, NotificationData as WebSocketNotificationData } from '../services/websocketService';
+import { notificationsService, NotificationData } from '../services/notifications';
 import { useAuth } from '@clerk/clerk-expo';
 
 interface NotificationContextType {
   notifications: NotificationData[];
   unreadCount: number;
   isConnected: boolean;
-  markAsRead: (notificationId: string) => void;
-  markAllAsRead: () => void;
-  removeNotification: (notificationId: string) => void;
-  clearAllNotifications: () => void;
+  isLoading: boolean;
+  markAsRead: (notificationId: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+  removeNotification: (notificationId: string) => Promise<void>;
+  clearAllNotifications: () => Promise<void>;
   testNotification: () => void;
+  refreshNotifications: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -21,20 +23,18 @@ interface NotificationProviderProps {
   children: ReactNode;
 }
 
-const STORAGE_KEY = 'finance_app_notifications';
-const MAX_NOTIFICATIONS = 50; // Limit stored notifications
-
 export const NotificationProvider: React.FC<NotificationProviderProps> = ({ children }) => {
-  const { isSignedIn, userId } = useAuth();
+  const { isSignedIn, userId, getToken } = useAuth();
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Load notifications from storage on mount
+  // Load notifications from database on mount
   useEffect(() => {
-    if (userId) {
-      loadNotificationsFromStorage();
+    if (userId && isSignedIn) {
+      loadNotificationsFromDatabase();
     }
-  }, [userId]);
+  }, [userId, isSignedIn]);
 
   // Setup WebSocket connection and listeners
   useEffect(() => {
@@ -69,92 +69,107 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     };
   }, []);
 
-  const loadNotificationsFromStorage = async () => {
+  const loadNotificationsFromDatabase = async () => {
     if (!userId) return;
     
     try {
-      const stored = await AsyncStorage.getItem(`${STORAGE_KEY}_${userId}`);
-      if (stored) {
-        const parsedNotifications = JSON.parse(stored);
-        setNotifications(parsedNotifications);
-      }
+      setIsLoading(true);
+      const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined;
+      const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined);
+      const data = await notificationsService.list(token || undefined);
+      setNotifications(data);
+      console.log('NotificationContext: Loaded notifications from database:', data.length);
     } catch (error) {
-      console.error('Error loading notifications from storage:', error);
+      console.error('Error loading notifications from database:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const saveNotificationsToStorage = async (notificationsList: NotificationData[]) => {
-    if (!userId) return;
-    
-    try {
-      await AsyncStorage.setItem(`${STORAGE_KEY}_${userId}`, JSON.stringify(notificationsList));
-    } catch (error) {
-      console.error('Error saving notifications to storage:', error);
-    }
+  const refreshNotifications = async () => {
+    await loadNotificationsFromDatabase();
   };
 
-  const handleNewNotification = (notification: NotificationData) => {
+  const handleNewNotification = async (notification: WebSocketNotificationData) => {
     console.log('NotificationContext: Received new notification:', notification);
     
-    // Ensure timestamp is properly formatted
-    const notificationWithTimestamp = {
-      ...notification,
-      timestamp: notification.createdAt ? new Date(notification.createdAt).getTime() : Date.now(),
-    };
-    
-    setNotifications(prev => {
-      const newNotifications = [notificationWithTimestamp, ...prev].slice(0, MAX_NOTIFICATIONS);
-      saveNotificationsToStorage(newNotifications);
-      console.log('NotificationContext: Updated notifications count:', newNotifications.length);
-      return newNotifications;
-    });
-
-    // You can add local push notification here if needed
-    // For example, using expo-notifications
+    // Refresh notifications from database to get the latest data
+    await loadNotificationsFromDatabase();
   };
 
-  const markAsRead = (notificationId: string) => {
-    setNotifications(prev => {
-      const updated = prev.map(notif => 
-        notif.id === notificationId ? { ...notif, isRead: true } : notif
+  const markAsRead = async (notificationId: string) => {
+    try {
+      const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined;
+      const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined);
+      await notificationsService.markAsRead(notificationId, token || undefined);
+      
+      // Update local state
+      setNotifications(prev => 
+        prev.map(notif => 
+          notif.id === notificationId ? { ...notif, isRead: true } : notif
+        )
       );
-      saveNotificationsToStorage(updated);
-      return updated;
-    });
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => {
-      const updated = prev.map(notif => ({ ...notif, isRead: true }));
-      saveNotificationsToStorage(updated);
-      return updated;
-    });
+  const markAllAsRead = async () => {
+    try {
+      const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined;
+      const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined);
+      await notificationsService.markAllAsRead(token || undefined);
+      
+      // Update local state
+      setNotifications(prev => 
+        prev.map(notif => ({ ...notif, isRead: true }))
+      );
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
   };
 
-  const removeNotification = (notificationId: string) => {
-    setNotifications(prev => {
-      const updated = prev.filter(notif => notif.id !== notificationId);
-      saveNotificationsToStorage(updated);
-      return updated;
-    });
+  const removeNotification = async (notificationId: string) => {
+    try {
+      const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined;
+      const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined);
+      await notificationsService.delete(notificationId, token || undefined);
+      
+      // Update local state
+      setNotifications(prev => 
+        prev.filter(notif => notif.id !== notificationId)
+      );
+    } catch (error) {
+      console.error('Error removing notification:', error);
+    }
   };
 
-  const clearAllNotifications = () => {
-    setNotifications([]);
-    saveNotificationsToStorage([]);
+  const clearAllNotifications = async () => {
+    try {
+      const jwtTemplate = process.env.EXPO_PUBLIC_CLERK_JWT_TEMPLATE as string | undefined;
+      const token = await getToken(jwtTemplate ? { template: jwtTemplate } : undefined);
+      await notificationsService.clearAll(token || undefined);
+      
+      // Update local state
+      setNotifications([]);
+    } catch (error) {
+      console.error('Error clearing all notifications:', error);
+    }
   };
 
   const testNotification = () => {
+    // This is just for testing the UI - it won't be stored in database
     const testNotif: NotificationData = {
       id: `test_${Date.now()}`,
       type: 'general',
       title: 'Test Notification',
-      message: 'This is a test notification to verify the system is working.',
-      userId: userId || '',
-      createdAt: new Date(),
+      message: 'This is a test notification to verify the UI is working.',
       isRead: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
-    handleNewNotification(testNotif);
+    
+    setNotifications(prev => [testNotif, ...prev]);
   };
 
   const unreadCount = notifications.filter(notif => !notif.isRead).length;
@@ -163,11 +178,13 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     notifications,
     unreadCount,
     isConnected,
+    isLoading,
     markAsRead,
     markAllAsRead,
     removeNotification,
     clearAllNotifications,
     testNotification,
+    refreshNotifications,
   };
 
   return (

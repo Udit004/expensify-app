@@ -41,7 +41,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onPre
           {notification.message}
         </Text>
         <Text style={[styles.notificationTime, { color: colors.text + '80' }]}>
-          {new Date(notification.createdAt || notification.timestamp).toLocaleString()}
+          {new Date(notification.createdAt).toLocaleString()}
         </Text>
       </View>
       <TouchableOpacity onPress={onDelete} style={styles.deleteButton}>
@@ -52,7 +52,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onPre
 };
 
 export default function NotificationsScreen() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification, clearAllNotifications, testNotification } = useNotifications();
+  const { notifications, unreadCount, isLoading, markAsRead, markAllAsRead, removeNotification, clearAllNotifications, testNotification, refreshNotifications } = useNotifications();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
@@ -112,6 +112,10 @@ export default function NotificationsScreen() {
             <Text style={[styles.actionText, { color: colors.text + '80' }]}>Clear all</Text>
           </TouchableOpacity>
         )}
+        <TouchableOpacity onPress={refreshNotifications} style={styles.actionButton}>
+          <Ionicons name="refresh" size={20} color={colors.tint} />
+          <Text style={[styles.actionText, { color: colors.tint }]}>Refresh</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={testNotification} style={styles.actionButton}>
           <Ionicons name="add-circle" size={20} color={colors.tint} />
           <Text style={[styles.actionText, { color: colors.tint }]}>Test</Text>
@@ -123,9 +127,11 @@ export default function NotificationsScreen() {
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
       <Ionicons name="notifications-off" size={64} color={colors.text + '40'} />
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>No notifications</Text>
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>
+        {isLoading ? 'Loading notifications...' : 'No notifications'}
+      </Text>
       <Text style={[styles.emptyMessage, { color: colors.text + '80' }]}>
-        You&apos;re all caught up! New notifications will appear here.
+        {isLoading ? 'Please wait while we fetch your notifications.' : 'You&apos;re all caught up! New notifications will appear here.'}
       </Text>
     </View>
   );
