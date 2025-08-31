@@ -15,7 +15,7 @@ import {
 import { useAuth, useUser, SignedIn, SignedOut } from '@clerk/clerk-expo'
 import { Link, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { LinearGradient } from 'expo-linear-gradient'
+
 import { useThemeColor } from '@/hooks/useThemeColor'
 import { useColorScheme } from '@/hooks/useColorScheme'
 import { budgetService, budgetUtils, type BudgetOverview, type Budget } from '@/services/budget'
@@ -349,6 +349,22 @@ export default function BudgetScreen() {
       color: 'rgba(255,255,255,0.8)',
       marginTop: 4,
     },
+    fab: {
+      position: 'absolute',
+      bottom: 90,
+      right: 20,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: '#10b981',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#10b981',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
+    },
   })
 
   useEffect(() => {
@@ -473,11 +489,17 @@ export default function BudgetScreen() {
             <>
               {/* Header Section with Overview */}
               <View style={styles.headerSection}>
-                <LinearGradient
-                  colors={getGradientColors(budgetOverview.percentageUsed, budgetOverview.remaining < 0) as [string, string]}
-                  style={styles.gradientCard}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
+                <View
+                  style={[
+                    styles.gradientCard,
+                    {
+                      backgroundColor:
+                        getGradientColors(
+                          budgetOverview.percentageUsed,
+                          budgetOverview.remaining < 0,
+                        )[0],
+                    },
+                  ]}
                 >
                   {/* Month Selector & Actions */}
                   <View style={styles.monthSelector}>
@@ -491,7 +513,7 @@ export default function BudgetScreen() {
                     <View style={styles.actionButtons}>
                       <TouchableOpacity 
                         style={styles.reportButton}
-                        onPress={() => router.push('/(tabs)/budgets/reports')}
+                        onPress={() => router.push('/budgets/reports')}
                       >
                         <Ionicons name="bar-chart" size={20} color="#ffffff" />
                         <Text style={{ color: '#ffffff', fontWeight: '600' }}>Reports</Text>
@@ -499,10 +521,10 @@ export default function BudgetScreen() {
                       
                       <TouchableOpacity 
                         style={styles.createButton}
-                        onPress={() => router.push('/(tabs)/budgets/create')}
+                        onPress={() => router.push('/budgets/create')}
                       >
                         <Ionicons name="add" size={20} color="#ffffff" />
-                        <Text style={{ color: '#ffffff', fontWeight: '600' }}>Budget</Text>
+                        <Text style={{ color: '#ffffff', fontWeight: '600' }}>Create Budget</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -576,7 +598,7 @@ export default function BudgetScreen() {
                       <Text style={styles.quickStatLabel}>Daily Limit</Text>
                     </View>
                   </View>
-                </LinearGradient>
+                </View>
               </View>
 
               {error && <Text style={styles.errorText}>{error}</Text>}
@@ -609,7 +631,16 @@ export default function BudgetScreen() {
               <View style={styles.card}>
                 <View style={styles.categoryHeader}>
                   <Text style={styles.sectionTitle}>Category Budgets</Text>
-                  <Text style={styles.categoryCount}>{budgets.length} budgets</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Text style={styles.categoryCount}>{budgets.length} budgets</Text>
+                    <TouchableOpacity 
+                      style={[styles.createButton, { paddingHorizontal: 12, paddingVertical: 8 }]}
+                      onPress={() => router.push('/budgets/create')}
+                    >
+                      <Ionicons name="add" size={16} color="#ffffff" />
+                      <Text style={{ color: '#ffffff', fontWeight: '600', fontSize: 14 }}>Add Budget</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 
                 {budgets.length === 0 ? (
@@ -621,6 +652,13 @@ export default function BudgetScreen() {
                     <Text style={styles.emptySubtitle}>
                       Create your first budget to start tracking your spending by category
                     </Text>
+                    <TouchableOpacity 
+                      style={[styles.createButton, { marginTop: 24 }]}
+                      onPress={() => router.push('/budgets/create')}
+                    >
+                      <Ionicons name="add" size={20} color="#ffffff" />
+                      <Text style={{ color: '#ffffff', fontWeight: '600' }}>Create New Budget</Text>
+                    </TouchableOpacity>
                   </View>
                 ) : (
                   budgets.map((budget) => {
@@ -705,7 +743,7 @@ export default function BudgetScreen() {
                 </Text>
                 <TouchableOpacity 
                   style={styles.createButton}
-                  onPress={() => router.push('/(tabs)/budgets/create')}
+                  onPress={() => router.push('/budgets/create')}
                 >
                   <Ionicons name="add" size={20} color="#ffffff" />
                   <Text style={{ color: '#ffffff', fontWeight: '600' }}>Create Budget</Text>
@@ -735,6 +773,16 @@ export default function BudgetScreen() {
           </View>
         </SignedOut>
       </ScrollView>
+      
+      {/* Floating Action Button */}
+      <SignedIn>
+        <TouchableOpacity 
+          style={styles.fab}
+          onPress={() => router.push('/budgets/create')}
+        >
+          <Ionicons name="add" size={28} color="#ffffff" />
+        </TouchableOpacity>
+      </SignedIn>
     </View>
   )
 }

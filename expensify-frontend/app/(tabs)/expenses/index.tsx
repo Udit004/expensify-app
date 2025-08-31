@@ -1,5 +1,5 @@
 import { SignedIn, SignedOut, useUser, useAuth } from '@clerk/clerk-expo'
-import { Link } from 'expo-router'
+import { Link, useRouter } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { ThemedView } from '@/components/ThemedView'
 import { ThemedText } from '@/components/ThemedText'
@@ -25,6 +25,7 @@ import { ExpenseList } from '@/components/expenseComponents/ExpenseList'
 import { EditExpenseModal } from '@/components/expenseComponents/EditExpenseModal'
 
 export default function Page() {
+  const router = useRouter()
   const { user } = useUser()
   const { getToken, isSignedIn } = useAuth()
   const [expenses, setExpenses] = useState<Expense[] | null>(null)
@@ -94,7 +95,7 @@ export default function Page() {
       fontSize: 16,
       fontWeight: '600',
     },
-    errorText: {
+        errorText: {
       color: '#ef4444',
       textAlign: 'center',
       fontSize: 14,
@@ -105,7 +106,26 @@ export default function Page() {
       borderColor: '#fecaca',
       marginBottom: 16,
     },
+    fab: {
+      position: 'absolute',
+      bottom: 90,
+      right: 20,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: '#10b981',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#10b981',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
+    },
   })
+    
+
+  
 
   const hasLoadedRef = useRef(false)
   useEffect(() => {
@@ -253,6 +273,8 @@ export default function Page() {
           {/* Welcome Card */}
           <WelcomeCard backendUser={backendUser} clerkUser={user} />
 
+          
+
           {/* Error Display */}
           {error && (
             <Text style={styles.errorText}>{error}</Text>
@@ -342,6 +364,16 @@ export default function Page() {
         onUpdate={handleUpdateExpense}
         isLoading={editLoading}
       />
+
+      {/* Create Budget FAB */}
+      <SignedIn>
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => router.push('/budgets/create')}
+        >
+          <Ionicons name="add" size={28} color="#ffffff" />
+        </TouchableOpacity>
+      </SignedIn>
     </View>
   )
 }
