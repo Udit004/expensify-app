@@ -6,9 +6,11 @@ import { CategoriesModule } from './categories/categories.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthUserService } from './users/auth-user.service';
+import { BudgetModule } from './budget/budget.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule, UsersModule, CategoriesModule, ExpensesModule],
+  imports: [PrismaModule, UsersModule, CategoriesModule, ExpensesModule, BudgetModule, NotificationsModule],
   controllers: [AppController],
   providers: [AppService, AuthUserService],
 })

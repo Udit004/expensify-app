@@ -1,43 +1,9 @@
-import { Platform } from 'react-native';
-import Constants from 'expo-constants';
+import { getApiUrl, getEnvironmentInfo } from '../config/environment';
 
-function resolvePrimaryBaseUrl(): string {
-  // Highest priority: explicit config via env
-  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
-  // Default primary: deployed Render URL
-  return 'https://expensify-app-ddil.onrender.com';
-}
-
-function resolveLocalFallbackUrl(): string {
-  // Web uses window.location hostname (works for localhost and LAN IPs)
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const { protocol, hostname } = window.location;
-    const host = hostname || 'localhost';
-    return `${protocol}//${host}:3000`;
-  }
-
-  // On native devices (Expo Go or dev builds), try to resolve LAN host from Expo
-  const hostUri = (Constants as any)?.expoConfig?.hostUri
-    || (Constants as any)?.manifest2?.extra?.expoClient?.hostUri
-    || (Constants as any)?.manifest?.debuggerHost;
-  if (hostUri) {
-    const host = hostUri.split(':')[0];
-    if (host) return `http://${host}:3000`;
-  }
-
-  // Android emulator fallback: cannot access host localhost — use 10.0.2.2
-  if (Platform.OS === 'android') return 'http://10.0.2.2:3000';
-
-  // iOS simulator fallback
-  if (Platform.OS === 'ios') return 'http://localhost:3000';
-
-  // Fallback
-  return 'http://localhost:3000';
-}
+// Log environment information on startup
+console.log('API Environment Info:', getEnvironmentInfo());
 
 let chosenBaseUrl: string | undefined;
-const PRIMARY_BASE_URL = resolvePrimaryBaseUrl();
-const LOCAL_FALLBACK_BASE_URL = resolveLocalFallbackUrl();
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
@@ -52,14 +18,16 @@ export async function apiFetch<TResponse = unknown, TBody = unknown>(
   options: RequestOptions<TBody> = {}
 ): Promise<TResponse> {
   if (!chosenBaseUrl) {
-    // Prefer primary; if it fails on first request, fall back for this session
-    chosenBaseUrl = PRIMARY_BASE_URL;
+    chosenBaseUrl = getApiUrl();
+    console.log('Using API URL:', chosenBaseUrl);
   }
+  
   let url = `${chosenBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
   const { method = 'GET', body, headers } = options;
 
   let response: Response | undefined;
   try {
+    console.log(`Making ${method} request to:`, url);
     response = await fetch(url, {
       method,
       headers: {
@@ -69,10 +37,13 @@ export async function apiFetch<TResponse = unknown, TBody = unknown>(
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (err) {
-    // Network failure: try local fallback once
-    if (chosenBaseUrl !== LOCAL_FALLBACK_BASE_URL) {
-      chosenBaseUrl = LOCAL_FALLBACK_BASE_URL;
+    console.log('Request failed, trying fallback URL...');
+    // If the current URL is not localhost, try localhost as fallback
+    if (!chosenBaseUrl.includes('localhost') && !chosenBaseUrl.includes('10.0.2.2')) {
+      const fallbackUrl = 'http://localhost:3000';
+      chosenBaseUrl = fallbackUrl;
       url = `${chosenBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+      console.log('Retrying with localhost fallback:', url);
       response = await fetch(url, {
         method,
         headers: {
@@ -111,7 +82,10 @@ export const api = {
 };
 
 export function getApiBaseUrl(): string {
-  return chosenBaseUrl || PRIMARY_BASE_URL;
+  return chosenBaseUrl || getApiUrl();
 }
+
+// Re-export environment info for convenience
+export { getEnvironmentInfo } from '../config/environment';
 
 

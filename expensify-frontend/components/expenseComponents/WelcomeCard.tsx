@@ -7,7 +7,7 @@ import type { UserResource } from '@clerk/types'
 
 interface WelcomeCardProps {
   backendUser: AppUser | null
-  clerkUser: UserResource | null
+  clerkUser: UserResource
 }
 
 export function WelcomeCard({ backendUser, clerkUser }: WelcomeCardProps) {

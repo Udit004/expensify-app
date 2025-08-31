@@ -1,10 +1,12 @@
 import { Redirect, Tabs } from 'expo-router'
 import React from 'react'
-import { useAuth } from '@clerk/clerk-expo'
+import { useAuth, useUser } from '@clerk/clerk-expo'
 import { Ionicons } from '@expo/vector-icons'
-import { useColorScheme } from '@/hooks/useColorScheme'
-import { Colors } from '@/constants/Colors'
+import { useColorScheme } from '../../hooks/useColorScheme'
+import { Colors } from '../../constants/Colors'
 import { View, Text } from 'react-native'
+import NotificationBadge from '../../components/NotificationBadge'
+
 
 function TabBarIcon({
   style,
@@ -19,6 +21,7 @@ function TabBarIcon({
 
 export default function TabLayout() {
   const { isLoaded, isSignedIn } = useAuth()
+  const { user } = useUser()
   const colorScheme = useColorScheme()
 
   if (isLoaded && !isSignedIn) {
@@ -27,7 +30,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      screenOptions={{
+        screenOptions={{
         headerShown: true,
         headerTitleAlign: 'left',
         headerStyle: {
@@ -52,6 +55,32 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon name={focused ? 'wallet' : 'wallet-outline'} color={color} />
           ),
+          headerShown: false, // Hide header for stack navigation
+        }}
+      />
+      <Tabs.Screen
+        name="budgets"
+        options={{
+          title: 'Budgets',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'analytics' : 'analytics-outline'} color={color} />
+          ),
+          headerShown: false, // Hide header for stack navigation
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Notifications',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={{ position: 'relative' }}>
+              <TabBarIcon name={focused ? 'notifications' : 'notifications-outline'} color={color} />
+              <View style={{ position: 'absolute', top: -5, right: -5 }}>
+                <NotificationBadge size="small" />
+              </View>
+            </View>
+          ),
+          headerShown: false, // Hide header for stack navigation
         }}
       />
       <Tabs.Screen
@@ -62,7 +91,7 @@ export default function TabLayout() {
             <TabBarIcon name={focused ? 'person' : 'person-outline'} color={color} />
           ),
         }}
-      />
-    </Tabs>
+              />
+      </Tabs>
   )
 }

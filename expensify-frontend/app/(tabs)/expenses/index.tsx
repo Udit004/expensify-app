@@ -3,10 +3,10 @@ import { Link } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { ThemedView } from '@/components/ThemedView'
 import { ThemedText } from '@/components/ThemedText'
-import { SignOutButton } from '../../components/SignOutButton'
-import { expensesService, type Expense } from '../../services/expenses'
-import { categoriesService, type Category } from '../../services/categories'
-import { usersService, type AppUser } from '../../services/users'
+import { SignOutButton } from '@/components/SignOutButton'
+import { expensesService, type Expense } from '@/services/expenses'
+import { categoriesService, type Category } from '@/services/categories'
+import { usersService, type AppUser } from '@/services/users'
 import { 
   ScrollView, 
   View, 
